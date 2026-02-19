@@ -1,13 +1,12 @@
 # utils/sentiment_analysis.py
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 from typing import List, Dict
 import streamlit as st
 
 FINBERT_MODEL = "yiyanghkust/finbert-tone"
 
-_tokenizer = None
-_model = None
 _pipe = None
+_load_attempted = False
+_load_success = False
 
 LABEL_MAP = {
     "positive": "positive",
@@ -20,24 +19,83 @@ LABEL_MAP = {
     "label_2": "positive"
 }
 
+# ── Keyword-based fallback (no ML needed) ──
+POSITIVE_WORDS = [
+    "gain", "gains", "up", "surge", "surges", "jump", "jumps", "rally",
+    "rallies", "rise", "rises", "soar", "soars", "record", "beat", "beats",
+    "positive", "bullish", "outperform", "upgrade", "upgraded", "higher",
+    "boost", "boosts", "profit", "growth", "expands", "upbeat", "optimistic",
+    "recover", "recovery", "strong", "strength", "buy", "overweight"
+]
+NEGATIVE_WORDS = [
+    "loss", "losses", "down", "drop", "drops", "fall", "falls", "plunge",
+    "plunges", "crash", "decline", "declines", "miss", "misses", "negative",
+    "bearish", "underperform", "downgrade", "downgraded", "lower", "cut",
+    "cuts", "concern", "warning", "warns", "weak", "weakness", "sell",
+    "underweight", "slump", "slumps", "recession", "layoff", "layoffs",
+    "debt", "default", "fraud", "scandal", "investigation", "lawsuit"
+]
+
+
+def _keyword_sentiment(text: str) -> Dict:
+    """Simple keyword-based sentiment as fallback."""
+    txt = text.lower()
+    pos_count = sum(1 for w in POSITIVE_WORDS if f" {w} " in f" {txt} " or txt.startswith(w) or txt.endswith(w))
+    neg_count = sum(1 for w in NEGATIVE_WORDS if f" {w} " in f" {txt} " or txt.startswith(w) or txt.endswith(w))
+
+    if pos_count > neg_count:
+        label = "positive"
+        score = min(0.5 + 0.1 * pos_count, 0.95)
+        numeric = score
+    elif neg_count > pos_count:
+        label = "negative"
+        score = min(0.5 + 0.1 * neg_count, 0.95)
+        numeric = -score
+    else:
+        label = "neutral"
+        score = 0.5
+        numeric = 0.0
+
+    return {
+        "label": label,
+        "score": round(score, 4),
+        "numeric_sentiment": round(numeric, 4),
+        "influence_score": round(numeric, 4),
+        "raw_label": label
+    }
+
+
 def get_finbert_pipeline():
-    global _tokenizer, _model, _pipe
-    if _pipe is None:
-        try:
-            st.write("🔄 Loading FinBERT model… (first time only)")
-            _tokenizer = AutoTokenizer.from_pretrained(FINBERT_MODEL)
-            _model = AutoModelForSequenceClassification.from_pretrained(FINBERT_MODEL)
-            _pipe = pipeline(
-                "sentiment-analysis",
-                model=_model,
-                tokenizer=_tokenizer,
-                truncation=True,
-                return_all_scores=False
-            )
-        except Exception as e:
-            st.error(f"❌ FinBERT failed to load: {e}")
-            raise
-    return _pipe
+    global _pipe, _load_attempted, _load_success
+
+    if _load_attempted:
+        if _load_success:
+            return _pipe
+        else:
+            return None
+
+    _load_attempted = True
+
+    try:
+        from transformers import BertTokenizer, BertForSequenceClassification, pipeline
+
+        st.write("🔄 Loading FinBERT model… (first time only)")
+        tokenizer = BertTokenizer.from_pretrained(FINBERT_MODEL)
+        model = BertForSequenceClassification.from_pretrained(FINBERT_MODEL)
+        _pipe = pipeline(
+            "sentiment-analysis",
+            model=model,
+            tokenizer=tokenizer,
+            truncation=True,
+            return_all_scores=False
+        )
+        _load_success = True
+        return _pipe
+
+    except Exception as e:
+        st.warning(f"⚠️ FinBERT not available — using keyword-based sentiment. Reason: {e}")
+        _load_success = False
+        return None
 
 
 def normalize_label(label: str) -> str:
@@ -51,11 +109,15 @@ def analyze_headlines(headlines: List[str], batch_size: int = 16) -> List[Dict]:
 
     pipe = get_finbert_pipeline()
 
+    # If FinBERT failed to load, use keyword fallback
+    if pipe is None:
+        return [_keyword_sentiment(h) for h in headlines]
+
     try:
         results = pipe(headlines, batch_size=batch_size)
     except Exception as e:
-        st.error(f"❌ FinBERT inference failed: {e}")
-        raise
+        st.warning(f"⚠️ FinBERT inference failed — using keyword fallback. ({e})")
+        return [_keyword_sentiment(h) for h in headlines]
 
     out = []
     for r in results:
@@ -70,13 +132,11 @@ def analyze_headlines(headlines: List[str], batch_size: int = 16) -> List[Dict]:
         else:
             numeric = 0.0
 
-        influence_score = numeric
-
         out.append({
             "label": label,
             "score": score,
             "numeric_sentiment": numeric,
-            "influence_score": influence_score,
+            "influence_score": numeric,
             "raw_label": raw_label
         })
 
