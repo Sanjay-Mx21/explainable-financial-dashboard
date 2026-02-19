@@ -21,7 +21,17 @@ from utils.historical_news_loader import load_historical_news_from_zip, filter_n
 from utils.multi_news_loader import fetch_all_sources
 
 # ======================= PAGE CONFIG ======================================
-st.set_page_config(page_title="Explainable Portfolio Dashboard", layout="wide")
+st.set_page_config(
+    page_title="Explainable Portfolio Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ── Inject custom CSS theme ──
+from utils.ui_theme import inject_custom_css, render_section_header, render_kpi_row
+inject_custom_css()
+
 st.title("📊 Explainable Portfolio Dashboard")
 
 # ================= LOAD HISTORICAL NEWS (ONCE) =================
@@ -359,6 +369,28 @@ if price_df_for_events is None:
 price_df_for_events["date"] = pd.to_datetime(price_df_for_events["date"], errors="coerce").dt.date
 
 # =====================================================================
+#                      KPI OVERVIEW CARDS
+# =====================================================================
+if not price_df_for_events.empty:
+    _kpi_df = price_df_for_events.copy()
+    _kpi_df["close"] = pd.to_numeric(_kpi_df.get("close", pd.Series()), errors="coerce")
+    _n_tickers = _kpi_df["ticker"].nunique()
+    _n_rows = len(_kpi_df)
+    _date_min = _kpi_df["date"].min()
+    _date_max = _kpi_df["date"].max()
+    _kpi_df = _kpi_df.sort_values(["ticker", "date"])
+    _kpi_df["_ret"] = _kpi_df.groupby("ticker")["close"].pct_change()
+    _avg_ret = _kpi_df["_ret"].mean()
+    _avg_ret_str = f"{_avg_ret*100:+.3f}%" if pd.notna(_avg_ret) else "N/A"
+
+    render_kpi_row([
+        {"label": "TICKERS", "value": str(_n_tickers)},
+        {"label": "DATA POINTS", "value": f"{_n_rows:,}"},
+        {"label": "DATE RANGE", "value": f"{_date_min} → {_date_max}"},
+        {"label": "AVG DAILY RETURN", "value": _avg_ret_str},
+    ])
+
+# =====================================================================
 #                      STOCK PRICE CHART
 # =====================================================================
 st.markdown("---")
@@ -454,22 +486,48 @@ else:
                     normalized, x="date_dt", y="pct_change", color="ticker",
                     title="Normalized Performance (% change from start)",
                     labels={"date_dt": "Date", "pct_change": "% Change", "ticker": "Ticker"},
+                    color_discrete_sequence=["#7B61FF","#00D2FF","#FF6B6B","#10B981","#F59E0B","#EC4899","#8B5CF6","#06B6D4","#F97316","#84CC16"],
                 )
                 fig.update_layout(
-                    height=500, hovermode="closest", legend_title_text="Ticker",
                     yaxis_ticksuffix="%"
                 )
-                fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+                fig.add_hline(y=0, line_dash="dash", line_color="rgba(255,255,255,0.15)", opacity=0.5)
             else:
                 fig = px.line(
                     df_plot, x="date_dt", y=price_col, color="ticker",
                     title=f"{price_col.upper()} Price Over Time",
                     labels={"date_dt": "Date", price_col: "Price", "ticker": "Ticker"},
+                    color_discrete_sequence=["#7B61FF","#00D2FF","#FF6B6B","#10B981","#F59E0B","#EC4899","#8B5CF6","#06B6D4","#F97316","#84CC16"],
                 )
-                fig.update_layout(height=500, hovermode="closest", legend_title_text="Ticker")
 
-            # ── Smooth lines: connect gaps and use spline shape ──
-            fig.update_traces(connectgaps=True, line_shape="spline")
+            # ── Smooth lines + dark modern chart styling ──
+            fig.update_traces(connectgaps=True, line_shape="spline", line_width=2.5)
+            fig.update_layout(
+                height=520,
+                hovermode="closest",
+                legend_title_text="Ticker",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(family="Inter, sans-serif", color="#E6EDF3"),
+                title=dict(font=dict(size=18, color="#E6EDF3")),
+                legend=dict(
+                    bgcolor="rgba(22,27,34,0.8)",
+                    bordercolor="rgba(123,97,255,0.2)",
+                    borderwidth=1,
+                    font=dict(size=12),
+                ),
+                xaxis=dict(
+                    gridcolor="rgba(255,255,255,0.04)",
+                    zerolinecolor="rgba(255,255,255,0.06)",
+                    linecolor="rgba(255,255,255,0.08)",
+                ),
+                yaxis=dict(
+                    gridcolor="rgba(255,255,255,0.04)",
+                    zerolinecolor="rgba(255,255,255,0.06)",
+                    linecolor="rgba(255,255,255,0.08)",
+                ),
+                margin=dict(l=20, r=20, t=50, b=20),
+            )
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Select at least one ticker to plot.")
@@ -477,7 +535,8 @@ else:
 # =====================================================================
 #                       NEWS FETCHING
 # =====================================================================
-st.subheader("📰 News feed (aggregated)")
+st.markdown("---")
+render_section_header("📰", "News Feed", "Aggregated headlines from selected sources")
 
 if mode.startswith("Live"):
     rss_items = []
@@ -548,7 +607,8 @@ else:
 # =====================================================================
 #                       SENTIMENT ANALYSIS
 # =====================================================================
-st.subheader("🧠 Sentiment analysis")
+st.markdown("---")
+render_section_header("🧠", "Sentiment Analysis", "FinBERT-powered headline scoring")
 headlines = df_news["title"].fillna("").astype(str).tolist()
 if not headlines:
     st.info("No headlines to analyze.")
@@ -565,6 +625,19 @@ with st.spinner("Analyzing headlines…"):
 
 s_df = pd.DataFrame(sent)
 merged = pd.concat([df_news.reset_index(drop=True), s_df.reset_index(drop=True)], axis=1)
+
+# ── Sentiment KPI cards ──
+if "label" in s_df.columns:
+    _pos = (s_df["label"] == "positive").sum()
+    _neg = (s_df["label"] == "negative").sum()
+    _neu = (s_df["label"] == "neutral").sum()
+    _total = len(s_df)
+    render_kpi_row([
+        {"label": "📰 HEADLINES", "value": str(_total)},
+        {"label": "🟢 POSITIVE", "value": str(_pos), "delta": f"{_pos/_total*100:.0f}%" if _total else None, "delta_color": "normal"},
+        {"label": "🔴 NEGATIVE", "value": str(_neg), "delta": f"{_neg/_total*100:.0f}%" if _total else None, "delta_color": "inverse"},
+        {"label": "⚪ NEUTRAL", "value": str(_neu)},
+    ])
 
 # =====================================================================
 #                       TICKER DETECTION
@@ -628,7 +701,8 @@ event_windows_df = compute_event_windows(exploded_df, price_df_for_events, backw
 # =====================================================================
 #                       EVENT STUDY TABLE
 # =====================================================================
-st.subheader("📋 Event study (backward returns AR & CAR)")
+st.markdown("---")
+render_section_header("📋", "Event Study", "Backward abnormal returns (AR) & cumulative AR")
 display_cols = ["event_date","detected_ticker","title","label","numeric_sentiment","ar_-1","ar_-2","ar_-3","car_-3_-1","source","link"]
 available_cols = [c for c in display_cols if c in event_windows_df.columns]
 st.dataframe(
@@ -654,7 +728,8 @@ if tickers_available:
 # =====================================================================
 #                       INFLUENCE RANKING
 # =====================================================================
-st.subheader("🏆 Top influencing headlines (|sentiment × backward CAR|)")
+st.markdown("---")
+render_section_header("🏆", "Top Influencing Headlines", "|sentiment × backward CAR| ranking")
 
 event_windows_df["numeric_sentiment"] = pd.to_numeric(
     event_windows_df["numeric_sentiment"], errors="coerce"
