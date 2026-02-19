@@ -425,7 +425,12 @@ else:
             & (plot_df["date_dt"].dt.date >= effective_start)
             & (plot_df["date_dt"].dt.date <= effective_end)
         )
-        df_plot = plot_df.loc[mask, ["date_dt", "ticker", price_col]]
+        df_plot = plot_df.loc[mask, ["date_dt", "ticker", price_col]].copy()
+        # ── Fix broken lines: sort, ensure numeric, drop NaN ──
+        df_plot[price_col] = pd.to_numeric(df_plot[price_col], errors="coerce")
+        df_plot = df_plot.dropna(subset=[price_col, "date_dt"])
+        df_plot = df_plot.sort_values(["ticker", "date_dt"]).reset_index(drop=True)
+
         if df_plot.empty:
             st.warning("No price data in the selected date range.")
         else:
@@ -438,7 +443,6 @@ else:
             )
 
             if chart_mode == "Normalized (% change)":
-                # Normalize: each ticker starts at 0%, show % change from first price in range
                 normalized = df_plot.copy()
                 normalized["pct_change"] = 0.0
                 for tk in normalized["ticker"].unique():
@@ -455,7 +459,6 @@ else:
                     height=500, hovermode="x unified", legend_title_text="Ticker",
                     yaxis_ticksuffix="%"
                 )
-                # Add a zero reference line
                 fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
             else:
                 fig = px.line(
@@ -465,6 +468,8 @@ else:
                 )
                 fig.update_layout(height=500, hovermode="x unified", legend_title_text="Ticker")
 
+            # ── Smooth lines: connect gaps and use spline shape ──
+            fig.update_traces(connectgaps=True, line_shape="spline")
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Select at least one ticker to plot.")
