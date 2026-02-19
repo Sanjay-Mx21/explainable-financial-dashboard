@@ -375,27 +375,7 @@ else:
         "Select tickers to plot", options=tickers_in_data, default=tickers_in_data
     )
 
-    col1, col2 = st.columns([2, 1])
-    with col2:
-        price_col = st.selectbox("Price type", ["close", "adj_close"], index=0)
-        min_d = plot_df["date_dt"].min().date()
-        max_d = plot_df["date_dt"].max().date()
-        date_range = st.date_input(
-            "Date range", value=(min_d, max_d),
-            min_value=min_d, max_value=max_d, key="price_chart_date_main"
-        )
-        # Reset quick range if user manually changes date picker
-        if len(date_range) == 2 and st.session_state.get("chart_quick_range"):
-            dr_start, dr_end = date_range
-            # Check if date range matches any quick range — if not, clear it
-            selected_label = st.session_state["chart_quick_range"]
-            expected_start = max(min_d, max_d - time_ranges.get(selected_label, timedelta(0)))
-            if dr_start != expected_start or dr_end != max_d:
-                st.session_state["chart_quick_range"] = None
-
-    # ── Quick time range buttons ──
-    st.markdown("**Quick range:**")
-    btn_cols = st.columns(7)
+    # ── Time range definitions (needed before date picker reset logic) ──
     time_ranges = {
         "1D": timedelta(days=1),
         "1W": timedelta(weeks=1),
@@ -406,9 +386,22 @@ else:
         "5Y": timedelta(days=5*365),
     }
 
-    # Initialize quick range in session state
     if "chart_quick_range" not in st.session_state:
         st.session_state["chart_quick_range"] = None
+
+    col1, col2 = st.columns([2, 1])
+    with col2:
+        price_col = st.selectbox("Price type", ["close", "adj_close"], index=0)
+        min_d = plot_df["date_dt"].min().date()
+        max_d = plot_df["date_dt"].max().date()
+        date_range = st.date_input(
+            "Date range", value=(min_d, max_d),
+            min_value=min_d, max_value=max_d, key="price_chart_date_main"
+        )
+
+    # ── Quick time range buttons ──
+    st.markdown("**Quick range:**")
+    btn_cols = st.columns(7)
 
     for i, (label, delta) in enumerate(time_ranges.items()):
         with btn_cols[i]:
