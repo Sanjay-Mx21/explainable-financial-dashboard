@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Streamlit secrets (NEVER commit)
+.streamlit/secrets.toml
+
+# Environment
+.env
+.env.*
+
+# Logs
+*.log
+
+# Data files (large — keep out of git)
+# ⚠️  BUT you need data/prices/*.csv for the app to work.
+# Option A: commit them (remove the lines below)
+# Option B: use Git LFS or fetch them at runtime
+# data/
+*.zip
+*.xlsx
+
+# Model cache (downloaded at runtime by transformers)
+*.pt
+*.bin
+*.h5
+*.pkl
+*.joblib
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

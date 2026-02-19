@@ -1,0 +1,3 @@
+# Place your stock price CSVs here
+# Format: date,open,high,low,close,volume
+# Filename = ticker (e.g. AAPL.csv, TCS.csv)
