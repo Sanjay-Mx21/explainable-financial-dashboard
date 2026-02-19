@@ -456,7 +456,7 @@ else:
                     labels={"date_dt": "Date", "pct_change": "% Change", "ticker": "Ticker"},
                 )
                 fig.update_layout(
-                    height=500, hovermode="x unified", legend_title_text="Ticker",
+                    height=500, hovermode="closest", legend_title_text="Ticker",
                     yaxis_ticksuffix="%"
                 )
                 fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
@@ -466,7 +466,7 @@ else:
                     title=f"{price_col.upper()} Price Over Time",
                     labels={"date_dt": "Date", price_col: "Price", "ticker": "Ticker"},
                 )
-                fig.update_layout(height=500, hovermode="x unified", legend_title_text="Ticker")
+                fig.update_layout(height=500, hovermode="closest", legend_title_text="Ticker")
 
             # ── Smooth lines: connect gaps and use spline shape ──
             fig.update_traces(connectgaps=True, line_shape="spline")
