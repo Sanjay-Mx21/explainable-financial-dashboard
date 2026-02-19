@@ -429,12 +429,42 @@ else:
         if df_plot.empty:
             st.warning("No price data in the selected date range.")
         else:
-            fig = px.line(
-                df_plot, x="date_dt", y=price_col, color="ticker",
-                title=f"{price_col.upper()} Price Over Time",
-                labels={"date_dt": "Date", price_col: "Price", "ticker": "Ticker"},
+            # Toggle: Absolute price vs Normalized (% change from start)
+            chart_mode = st.radio(
+                "Chart mode",
+                ["Absolute Price", "Normalized (% change)"],
+                horizontal=True,
+                key="chart_mode_toggle"
             )
-            fig.update_layout(height=500, hovermode="x unified", legend_title_text="Ticker")
+
+            if chart_mode == "Normalized (% change)":
+                # Normalize: each ticker starts at 0%, show % change from first price in range
+                normalized = df_plot.copy()
+                normalized["pct_change"] = 0.0
+                for tk in normalized["ticker"].unique():
+                    tk_mask = normalized["ticker"] == tk
+                    tk_data = normalized.loc[tk_mask, price_col].values
+                    if len(tk_data) > 0 and tk_data[0] != 0:
+                        normalized.loc[tk_mask, "pct_change"] = ((tk_data / tk_data[0]) - 1) * 100
+                fig = px.line(
+                    normalized, x="date_dt", y="pct_change", color="ticker",
+                    title="Normalized Performance (% change from start)",
+                    labels={"date_dt": "Date", "pct_change": "% Change", "ticker": "Ticker"},
+                )
+                fig.update_layout(
+                    height=500, hovermode="x unified", legend_title_text="Ticker",
+                    yaxis_ticksuffix="%"
+                )
+                # Add a zero reference line
+                fig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5)
+            else:
+                fig = px.line(
+                    df_plot, x="date_dt", y=price_col, color="ticker",
+                    title=f"{price_col.upper()} Price Over Time",
+                    labels={"date_dt": "Date", price_col: "Price", "ticker": "Ticker"},
+                )
+                fig.update_layout(height=500, hovermode="x unified", legend_title_text="Ticker")
+
             st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Select at least one ticker to plot.")
