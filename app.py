@@ -174,23 +174,49 @@ def compute_event_windows(exploded_events_df, price_df, backward_days=3):
 # =====================================================================
 #                        SIDEBAR — TICKER MANAGEMENT
 # =====================================================================
+from utils.ticker_search import search_tickers
+
 st.sidebar.header("🎯 Stock Picker")
 
-# ── 1. Text input — type any ticker ──
-st.sidebar.markdown("**Type any ticker** (e.g. `AAPL`, `TCS.NS`, `TSLA`)")
-new_ticker_input = st.sidebar.text_input(
-    "Add ticker(s) — comma separated",
-    placeholder="AAPL, RELIANCE.NS, GOOGL",
-    key="add_ticker_input"
+# ── 1. Smart search bar — type company name or ticker ──
+st.sidebar.markdown("**🔍 Search any stock** — type a name like `Google`, `Reliance`, `Tesla`…")
+search_query = st.sidebar.text_input(
+    "Search stocks",
+    placeholder="Type company name or ticker…",
+    key="stock_search_input"
 )
-if st.sidebar.button("➕ Add", key="add_btn"):
-    if new_ticker_input and new_ticker_input.strip():
-        new_tickers = [normalize_ticker_guess(t.strip()) for t in new_ticker_input.split(",") if t.strip()]
-        for nt in new_tickers:
-            if nt and nt not in st.session_state["user_tickers"]:
-                st.session_state["user_tickers"].append(nt)
-        st.session_state["portfolio_prices"] = pd.DataFrame()
-        st.rerun()
+
+# Show search results as clickable suggestions
+if search_query and len(search_query.strip()) >= 1:
+    suggestions = search_tickers(search_query.strip(), max_results=8)
+    if suggestions:
+        for s in suggestions:
+            tk = s["ticker"]
+            name = s.get("name", "")
+            exchange = s.get("exchange", "")
+            already_in = tk in st.session_state["user_tickers"]
+            label = f"{'✅' if already_in else '➕'} **{tk}** — {name}"
+            if exchange:
+                label += f" `{exchange}`"
+            if st.sidebar.button(
+                label,
+                key=f"search_{tk}",
+                disabled=already_in,
+                use_container_width=True
+            ):
+                if tk not in st.session_state["user_tickers"]:
+                    st.session_state["user_tickers"].append(tk)
+                    st.session_state["portfolio_prices"] = pd.DataFrame()
+                    st.rerun()
+    else:
+        # No match found — offer to add raw input as ticker
+        raw_ticker = search_query.strip().upper()
+        st.sidebar.caption(f"No match found. Add `{raw_ticker}` directly?")
+        if st.sidebar.button(f"➕ Add {raw_ticker}", key="add_raw"):
+            if raw_ticker not in st.session_state["user_tickers"]:
+                st.session_state["user_tickers"].append(raw_ticker)
+                st.session_state["portfolio_prices"] = pd.DataFrame()
+                st.rerun()
 
 # ── 2. Quick-add from suggestions ──
 st.sidebar.markdown("---")
