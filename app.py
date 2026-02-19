@@ -384,13 +384,53 @@ else:
             "Date range", value=(min_d, max_d),
             min_value=min_d, max_value=max_d, key="price_chart_date_main"
         )
+        # Reset quick range if user manually changes date picker
+        if len(date_range) == 2 and st.session_state.get("chart_quick_range"):
+            dr_start, dr_end = date_range
+            # Check if date range matches any quick range — if not, clear it
+            selected_label = st.session_state["chart_quick_range"]
+            expected_start = max(min_d, max_d - time_ranges.get(selected_label, timedelta(0)))
+            if dr_start != expected_start or dr_end != max_d:
+                st.session_state["chart_quick_range"] = None
 
-    if selected_plot_tickers and len(date_range) == 2:
-        start_d, end_d = date_range
+    # ── Quick time range buttons ──
+    st.markdown("**Quick range:**")
+    btn_cols = st.columns(7)
+    time_ranges = {
+        "1D": timedelta(days=1),
+        "1W": timedelta(weeks=1),
+        "1M": timedelta(days=30),
+        "3M": timedelta(days=90),
+        "6M": timedelta(days=180),
+        "1Y": timedelta(days=365),
+        "5Y": timedelta(days=5*365),
+    }
+
+    # Initialize quick range in session state
+    if "chart_quick_range" not in st.session_state:
+        st.session_state["chart_quick_range"] = None
+
+    for i, (label, delta) in enumerate(time_ranges.items()):
+        with btn_cols[i]:
+            if st.button(label, key=f"range_{label}", use_container_width=True):
+                st.session_state["chart_quick_range"] = label
+
+    # Determine effective date range
+    if st.session_state.get("chart_quick_range"):
+        selected_label = st.session_state["chart_quick_range"]
+        delta = time_ranges[selected_label]
+        effective_end = max_d
+        effective_start = max(min_d, max_d - delta)
+    elif len(date_range) == 2:
+        effective_start, effective_end = date_range
+    else:
+        effective_start, effective_end = min_d, max_d
+
+    if selected_plot_tickers:
         mask = (
             plot_df["ticker"].isin(selected_plot_tickers)
-            & (plot_df["date_dt"].dt.date >= start_d)
-            & (plot_df["date_dt"].dt.date <= end_d)
+            & (plot_df["date_dt"].dt.date >= effective_start)
+            & (plot_df["date_dt"].dt.date <= effective_end)
         )
         df_plot = plot_df.loc[mask, ["date_dt", "ticker", price_col]]
         if df_plot.empty:
