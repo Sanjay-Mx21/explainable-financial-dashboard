@@ -1,5 +1,7 @@
 # Explainable Portfolio Dashboard
 
+🔗 **Live Demo:** [Click here](https://explainable-financial-dashboard-psqjm2ztlgetjgmukcscwy.streamlit.app/)
+
 A Streamlit-based dashboard that combines stock price analysis with news sentiment (FinBERT) to create an explainable event study framework.
 
 ## Features
@@ -13,14 +15,12 @@ A Streamlit-based dashboard that combines stock price analysis with news sentime
 - **Multi-source news explorer** — compare headlines across providers
 
 ## Quick Start
-
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
 ## Project Structure
-
 ```
 ├── app.py                          # Main dashboard
 ├── pages/
