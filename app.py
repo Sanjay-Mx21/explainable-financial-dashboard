@@ -251,7 +251,11 @@ def compute_event_windows(exploded_events_df, price_df, backward_days=3):
 # =====================================================================
 #                        SIDEBAR — TICKER MANAGEMENT
 # =====================================================================
-from utils.ticker_search import search_tickers
+try:
+    from utils.ticker_search import search_tickers
+    _has_ticker_search = True
+except ImportError:
+    _has_ticker_search = False
 
 st.sidebar.header("🎯 Stock Picker")
 
@@ -265,7 +269,11 @@ search_query = st.sidebar.text_input(
 
 # Show search results as clickable suggestions
 if search_query and len(search_query.strip()) >= 1:
-    suggestions = search_tickers(search_query.strip(), max_results=8)
+    if _has_ticker_search:
+        suggestions = search_tickers(search_query.strip(), max_results=8)
+    else:
+        suggestions = []
+
     if suggestions:
         for s in suggestions:
             tk = s["ticker"]
@@ -367,9 +375,15 @@ use_finnhub = st.sidebar.checkbox("Finnhub", value=False)
 
 newsapi_key, finnhub_key = "", ""
 if use_newsapi:
-    newsapi_key = st.sidebar.text_input("NewsAPI key", type="password") or st.secrets.get("NEWSAPI_KEY", "")
+    _default_newsapi = ""
+    try: _default_newsapi = st.secrets.get("NEWSAPI_KEY", "")
+    except Exception: pass
+    newsapi_key = st.sidebar.text_input("NewsAPI key", type="password") or _default_newsapi
 if use_finnhub:
-    finnhub_key = st.sidebar.text_input("Finnhub key", type="password") or st.secrets.get("FINNHUB_KEY", "")
+    _default_finnhub = ""
+    try: _default_finnhub = st.secrets.get("FINNHUB_KEY", "")
+    except Exception: pass
+    finnhub_key = st.sidebar.text_input("Finnhub key", type="password") or _default_finnhub
 
 active_sources = []
 if use_google: active_sources.append("google_rss")
@@ -554,6 +568,7 @@ else:
                     title="Normalized Performance (% change from start)",
                     labels={"date_dt": "Date", "pct_change": "% Change", "ticker": "Ticker"},
                     color_discrete_sequence=["#7B61FF","#00D2FF","#FF6B6B","#10B981","#F59E0B","#EC4899","#8B5CF6","#06B6D4","#F97316","#84CC16"],
+                    line_shape="spline",
                 )
                 fig.update_layout(
                     yaxis_ticksuffix="%"
@@ -565,10 +580,11 @@ else:
                     title=f"{price_col.upper()} Price Over Time",
                     labels={"date_dt": "Date", price_col: "Price", "ticker": "Ticker"},
                     color_discrete_sequence=["#7B61FF","#00D2FF","#FF6B6B","#10B981","#F59E0B","#EC4899","#8B5CF6","#06B6D4","#F97316","#84CC16"],
+                    line_shape="spline",
                 )
 
             # ── Smooth lines + dark modern chart styling ──
-            fig.update_traces(connectgaps=True, line_shape="spline", line_width=2.5)
+            fig.update_traces(connectgaps=True)
             fig.update_layout(
                 height=520,
                 hovermode="closest",
